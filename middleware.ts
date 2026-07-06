@@ -32,8 +32,10 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
-  // Public routes that don't require auth
-  const publicPaths = ['/login', '/invite', '/auth']
+  // Public routes that don't require auth. /api/admin/invite is here too —
+  // someone opening an invite link isn't logged in yet, but needs to reach
+  // it to view/accept the invite.
+  const publicPaths = ['/login', '/invite', '/auth', '/api/admin/invite']
   const isPublic = publicPaths.some(p => pathname.startsWith(p))
 
   if (!user && !isPublic) {

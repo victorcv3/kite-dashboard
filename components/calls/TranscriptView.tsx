@@ -1,29 +1,26 @@
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { cn } from '@/lib/utils'
+import type { VapiTranscriptMessage } from '@/types/app'
 
 interface Message {
   role: 'AI' | 'User'
   text: string
 }
 
-function parseTranscript(transcript: string): Message[] {
-  return transcript
-    .split('\n')
-    .map(line => line.trim())
-    .filter(Boolean)
-    .map(line => {
-      if (line.startsWith('AI:')) return { role: 'AI' as const, text: line.slice(3).trim() }
-      if (line.startsWith('User:')) return { role: 'User' as const, text: line.slice(5).trim() }
-      if (line.startsWith('Assistant:')) return { role: 'AI' as const, text: line.slice(10).trim() }
-      return { role: 'User' as const, text: line }
-    })
+// Only 'bot' and 'user' are actual spoken conversation — 'system' is the
+// assistant's instructions and 'tool_calls'/'tool_call_result' are function-
+// call internals, none of which belong in a caller-facing transcript.
+export function messagesToTranscript(messages: VapiTranscriptMessage[]): Message[] {
+  return messages
+    .filter((m): m is VapiTranscriptMessage & { role: 'bot' | 'user' } => m.role === 'bot' || m.role === 'user')
+    .filter(m => m.message?.trim())
+    .sort((a, b) => a.time - b.time)
+    .map(m => ({ role: m.role === 'bot' ? 'AI' as const : 'User' as const, text: m.message.trim() }))
 }
 
-export function TranscriptView({ transcript }: { transcript: string }) {
-  const messages = parseTranscript(transcript)
-
+export function TranscriptView({ messages }: { messages: Message[] }) {
   return (
-    <ScrollArea className="h-80">
+    <ScrollArea className="h-[560px]">
       <div className="space-y-3 pr-4">
         {messages.map((msg, i) => (
           <div

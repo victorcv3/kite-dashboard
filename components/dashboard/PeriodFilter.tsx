@@ -1,23 +1,36 @@
 'use client'
 
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, usePathname, useSearchParams } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import type { Period } from '@/lib/vapi/client'
 
-const PERIODS = [
+export const PERIODS = [
   { key: 'today', label: 'Today' },
   { key: 'week', label: 'Week' },
-  { key: 'month', label: 'Month' },
-  { key: 'all', label: 'All time' },
+  { key: 'max', label: 'Last 14 days' },
 ] as const
 
-export function PeriodFilter({ current }: { current: string }) {
+interface Props {
+  current: Period
+  // Omit to drive the period via the URL's `?period=` query param (server
+  // pages re-fetch on navigation). Pass it when the parent is a client
+  // component managing its own filter state instead (e.g. Calls page).
+  onChange?: (period: Period) => void
+}
+
+export function PeriodFilter({ current, onChange }: Props) {
   const router = useRouter()
+  const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  function handleSelect(key: string) {
+  function handleSelect(key: Period) {
+    if (onChange) {
+      onChange(key)
+      return
+    }
     const params = new URLSearchParams(searchParams.toString())
     params.set('period', key)
-    router.push(`/dashboard?${params.toString()}`)
+    router.push(`${pathname}?${params.toString()}`)
   }
 
   return (

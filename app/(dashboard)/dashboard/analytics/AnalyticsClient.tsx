@@ -5,17 +5,24 @@ import {
   LineChart, Line, Cell
 } from 'recharts'
 import type { AnalyticsData, VapiCall } from '@/types/app'
+import type { Period } from '@/lib/vapi/client'
+import { PeriodFilter } from '@/components/dashboard/PeriodFilter'
+import { endedReasonLabel } from '@/lib/utils'
+import { format } from 'date-fns'
+
+const PERIOD_LABELS: Record<Period, string> = {
+  today: 'today',
+  week: 'last 7 days',
+  max: 'last 14 days',
+}
 
 interface Props {
   analytics: AnalyticsData
   calls: VapiCall[]
+  period: Period
 }
 
-export function AnalyticsClient({ analytics, calls }: Props) {
-  const successRate = analytics.totalCalls > 0
-    ? Math.round((analytics.successfulCalls / analytics.totalCalls) * 100)
-    : 0
-
+export function AnalyticsClient({ analytics, calls, period }: Props) {
   // Calls by hour of day
   const hourBuckets = Array.from({ length: 24 }, (_, i) => ({
     hour: i === 0 ? '12am' : i < 12 ? `${i}am` : i === 12 ? '12pm' : `${i - 12}pm`,
@@ -26,6 +33,25 @@ export function AnalyticsClient({ analytics, calls }: Props) {
     if (ts) hourBuckets[new Date(ts).getHours()].calls++
   })
   const peakHour = hourBuckets.reduce((a, b) => b.calls > a.calls ? b : a)
+
+  // Busiest day — an actual calendar date, not a day-of-week bucket. With
+  // only a 14-day retention window there's barely 2 samples per weekday, so
+  // "Wednesdays are busy" isn't a real pattern — a specific date is.
+  const dateCounts = new Map<string, { label: string; calls: number }>()
+  calls.forEach(c => {
+    const ts = c.startedAt ?? c.createdAt
+    if (!ts) return
+    const date = new Date(ts)
+    const key = format(date, 'yyyy-MM-dd')
+    const label = `${format(date, 'MMM d')} · ${format(date, 'EEE')}`
+    const existing = dateCounts.get(key)
+    if (existing) existing.calls++
+    else dateCounts.set(key, { label, calls: 1 })
+  })
+  const busiestDay = Array.from(dateCounts.values()).reduce(
+    (a, b) => b.calls > a.calls ? b : a,
+    { label: '—', calls: 0 }
+  )
 
   // Duration distribution
   const durationBuckets = [
@@ -44,37 +70,46 @@ export function AnalyticsClient({ analytics, calls }: Props) {
     else durationBuckets[4].count++
   })
 
-  // Per-assistant breakdown
-  const byAssistant: Record<string, { name: string; total: number; successful: number }> = {}
+  // Repeat caller rate — of everyone who called, what % called more than once
+  const callerCounts = new Map<string, number>()
   calls.forEach(c => {
-    const name = c.assistant?.name ?? 'Unknown'
-    if (!byAssistant[name]) byAssistant[name] = { name, total: 0, successful: 0 }
-    byAssistant[name].total++
-    if (c.analysis?.successEvaluation === 'true') byAssistant[name].successful++
+    const number = c.customer?.number
+    if (!number) return
+    callerCounts.set(number, (callerCounts.get(number) ?? 0) + 1)
   })
-  const assistantData = Object.values(byAssistant).map(a => ({
-    name: a.name,
-    total: a.total,
-    rate: Math.round((a.successful / a.total) * 100),
-  }))
+  const uniqueCallerCount = callerCounts.size
+  const repeatCallerCount = Array.from(callerCounts.values()).filter(n => n > 1).length
+  const repeatCallerRate = uniqueCallerCount > 0 ? Math.round((repeatCallerCount / uniqueCallerCount) * 100) : 0
+
+  // End reason breakdown — how calls actually ended, not just success/fail
+  const endReasonCounts: Record<string, number> = {}
+  calls.forEach(c => {
+    const reason = endedReasonLabel(c.endedReason)
+    endReasonCounts[reason] = (endReasonCounts[reason] ?? 0) + 1
+  })
+  const endReasonData = Object.entries(endReasonCounts)
+    .map(([reason, count]) => ({ reason, count }))
+    .sort((a, b) => b.count - a.count)
 
   return (
     <div className="space-y-5">
       {/* Header */}
-      <div>
-        <h1 className="text-xl font-semibold tracking-[-0.01em] text-[#0A0A0A]">Analytics</h1>
-        <p className="text-sm mt-0.5" style={{ color: 'rgba(10,10,10,0.40)' }}>
-          Deep dive into your call performance — last 30 days
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-[-0.01em] text-[#0A0A0A]">Analytics</h1>
+          <p className="text-sm mt-0.5" style={{ color: 'rgba(10,10,10,0.40)' }}>
+            Deep dive into your call performance — {PERIOD_LABELS[period]}
+          </p>
+        </div>
+        <PeriodFilter current={period} />
       </div>
 
-      {/* KPI row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      {/* KPI row — deeper metrics only; totals/success rate already live on the Dashboard */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         {[
-          { label: 'Success Rate', value: `${successRate}%`, color: '#10b981' },
-          { label: 'Total Calls', value: analytics.totalCalls },
-          { label: 'Avg Duration', value: `${Math.round(analytics.avgDuration)}s` },
           { label: 'Peak Hour', value: peakHour.calls > 0 ? peakHour.hour : '—' },
+          { label: 'Repeat Caller Rate', value: `${repeatCallerRate}%`, color: '#8b5cf6' },
+          { label: 'Busiest Day', value: busiestDay.calls > 0 ? busiestDay.label : '—' },
         ].map(({ label, value, color }) => (
           <div key={label} className="bg-white rounded-2xl border border-[rgba(10,10,10,0.07)] p-5 shadow-[0_1px_4px_rgba(10,10,10,0.06)]">
             <p className="text-xs font-medium tracking-[0.1em] uppercase mb-2" style={{ color: 'rgba(10,10,10,0.40)' }}>{label}</p>
@@ -120,29 +155,31 @@ export function AnalyticsClient({ analytics, calls }: Props) {
         </div>
       </div>
 
-      {/* Per-assistant table */}
-      {assistantData.length > 0 && (
+      {/* End reason breakdown */}
+      {endReasonData.length > 0 && (
         <div className="bg-white rounded-2xl border border-[rgba(10,10,10,0.07)] shadow-[0_1px_4px_rgba(10,10,10,0.06)]">
           <div className="px-6 py-4 border-b border-[rgba(10,10,10,0.06)]">
-            <p className="text-[15px] font-semibold text-[#0A0A0A]">Performance by Assistant</p>
-            <p className="text-xs mt-0.5" style={{ color: 'rgba(10,10,10,0.40)' }}>Success rate per AI agent</p>
+            <p className="text-[15px] font-semibold text-[#0A0A0A]">End Reason Breakdown</p>
+            <p className="text-xs mt-0.5" style={{ color: 'rgba(10,10,10,0.40)' }}>How your calls actually ended</p>
           </div>
           <div>
-            {assistantData.map((a, i) => (
+            {endReasonData.map((r, i) => (
               <div
-                key={a.name}
+                key={r.reason}
                 className="flex items-center gap-4 px-6 py-4"
                 style={{ borderTop: i > 0 ? '1px solid rgba(10,10,10,0.04)' : undefined }}
               >
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-[#0A0A0A]">{a.name}</p>
-                  <p className="text-xs mt-0.5" style={{ color: 'rgba(10,10,10,0.40)' }}>{a.total} calls</p>
+                  <p className="text-sm font-medium text-[#0A0A0A]">{r.reason}</p>
                 </div>
                 <div className="flex items-center gap-3">
                   <div className="w-32 h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: 'rgba(10,10,10,0.06)' }}>
-                    <div className="h-full rounded-full bg-[#10b981]" style={{ width: `${a.rate}%` }} />
+                    <div
+                      className="h-full rounded-full bg-[#8b5cf6]"
+                      style={{ width: `${Math.round((r.count / calls.length) * 100)}%` }}
+                    />
                   </div>
-                  <span className="text-sm font-semibold text-[#10b981] w-10 text-right">{a.rate}%</span>
+                  <span className="text-sm font-semibold text-[#0A0A0A] w-10 text-right">{r.count}</span>
                 </div>
               </div>
             ))}

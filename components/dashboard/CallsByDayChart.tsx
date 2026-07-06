@@ -1,7 +1,7 @@
 'use client'
 
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts'
 
 interface DataPoint {
@@ -22,7 +22,7 @@ export function CallsByDayChart({ data }: { data: DataPoint[] }) {
 
   return (
     <ResponsiveContainer width="100%" height={280}>
-      <LineChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+      <BarChart data={data} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="rgba(10,10,10,0.06)" vertical={false} />
         <XAxis
           dataKey="date"
@@ -45,18 +45,18 @@ export function CallsByDayChart({ data }: { data: DataPoint[] }) {
             fontFamily: 'Satoshi, system-ui',
             boxShadow: '0 4px 16px -4px rgba(10,10,10,0.12)',
           }}
+          cursor={{ fill: 'rgba(10,10,10,0.04)' }}
           formatter={(value) => [value, 'Calls']}
         />
-        <Line
-          type="monotone"
+        <Bar
           dataKey="count"
           name="Calls"
-          stroke="#6366f1"
-          strokeWidth={2.5}
-          dot={false}
-          activeDot={{ r: 5, strokeWidth: 0, fill: '#6366f1' }}
+          fill="#6366f1"
+          radius={[4, 4, 0, 0]}
+          maxBarSize={40}
+          isAnimationActive={false}
         />
-      </LineChart>
+      </BarChart>
     </ResponsiveContainer>
   )
 }

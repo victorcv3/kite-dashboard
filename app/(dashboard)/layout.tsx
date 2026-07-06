@@ -8,16 +8,12 @@ type ProfileRow = Database['public']['Tables']['profiles']['Row']
 type CompanyRow = Database['public']['Tables']['companies']['Row']
 
 const MOCK_PROFILE = { id: 'mock-user', company_id: 'mock-company', role: 'admin', full_name: 'John Doe' } as unknown as ProfileRow
-const MOCK_COMPANY = { id: 'mock-company', name: 'Acme Corp', brand_color: '#6366f1', logo_url: null } as unknown as CompanyRow
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   if (process.env.SKIP_AUTH === 'true') {
     return (
-      <div
-        className="flex h-screen overflow-hidden bg-slate-50"
-        style={{ '--brand': '#6366f1' } as React.CSSProperties}
-      >
-        <Sidebar isAdmin={true} companyName="Acme Corp" brandColor="#6366f1" logoUrl={null} />
+      <div className="flex h-screen overflow-hidden bg-slate-50">
+        <Sidebar companyName="Acme Corp" />
         <div className="flex flex-col flex-1 overflow-hidden">
           <TopBar userEmail="john.doe@example.com" userName={MOCK_PROFILE.full_name} companyName="Acme Corp" />
           <main className="flex-1 overflow-auto p-6">{children}</main>
@@ -48,19 +44,10 @@ export default async function DashboardLayout({ children }: { children: React.Re
     .single()
 
   const company = companyRaw as unknown as CompanyRow | null
-  const brandColor = company?.brand_color ?? '#6366f1'
 
   return (
-    <div
-      className="flex h-screen overflow-hidden bg-slate-50"
-      style={{ '--brand': brandColor } as React.CSSProperties}
-    >
-      <Sidebar
-        isAdmin={profile.role === 'admin'}
-        companyName={company?.name ?? 'Dashboard'}
-        brandColor={brandColor}
-        logoUrl={company?.logo_url}
-      />
+    <div className="flex h-screen overflow-hidden bg-slate-50">
+      <Sidebar companyName={company?.name ?? 'Dashboard'} />
       <div className="flex flex-col flex-1 overflow-hidden">
         <TopBar
           userEmail={user.email ?? ''}

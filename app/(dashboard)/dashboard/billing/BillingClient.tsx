@@ -5,8 +5,8 @@ import type { AnalyticsData } from '@/types/app'
 import { TrendingUp, TrendingDown } from 'lucide-react'
 
 interface Props {
-  thisMonth: AnalyticsData
-  lastMonth: AnalyticsData
+  current: AnalyticsData
+  previous: AnalyticsData
 }
 
 const BREAKDOWN_COLORS = ['#6366f1', '#10b981', '#f97316', '#94a3b8']
@@ -18,11 +18,11 @@ function pct(a: number, b: number) {
   return ((a - b) / b) * 100
 }
 
-export function BillingClient({ thisMonth, lastMonth }: Props) {
-  const cost = thisMonth.estimatedCost
-  const prevCost = lastMonth.estimatedCost
+export function BillingClient({ current, previous }: Props) {
+  const cost = current.estimatedCost
+  const prevCost = previous.estimatedCost
   const trend = pct(cost, prevCost)
-  const avgPerCall = thisMonth.totalCalls > 0 ? cost / thisMonth.totalCalls : 0
+  const avgPerCall = current.totalCalls > 0 ? cost / current.totalCalls : 0
 
   // Cost breakdown (approximate from known ratios)
   const breakdown = [
@@ -33,9 +33,9 @@ export function BillingClient({ thisMonth, lastMonth }: Props) {
   ]
 
   // Daily cost from callsByDay
-  const dailyCostData = thisMonth.callsByDay.map(d => ({
+  const dailyCostData = current.callsByDay.map(d => ({
     date: d.date,
-    cost: parseFloat(((d.count / (thisMonth.totalCalls || 1)) * cost).toFixed(3)),
+    cost: parseFloat(((d.count / (current.totalCalls || 1)) * cost).toFixed(3)),
   }))
 
   const isUp = trend !== null && trend > 0
@@ -55,13 +55,13 @@ export function BillingClient({ thisMonth, lastMonth }: Props) {
         {/* Total spent */}
         <div className="bg-white rounded-2xl border border-[rgba(10,10,10,0.07)] p-5 shadow-[0_1px_4px_rgba(10,10,10,0.06)]">
           <p className="text-xs font-medium tracking-[0.1em] uppercase mb-3" style={{ color: 'rgba(10,10,10,0.40)' }}>
-            Total Spent (30 days)
+            Total Spent (7 days)
           </p>
           <p className="text-3xl font-bold tracking-[-0.03em] text-[#0A0A0A]">${cost.toFixed(2)}</p>
           {trend !== null && (
             <div className={`flex items-center gap-1 mt-2 text-xs font-semibold ${isUp ? 'text-[#ef4444]' : 'text-[#10b981]'}`}>
               {isUp ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-              {isUp ? '+' : ''}{trend.toFixed(1)}% vs last 30 days
+              {isUp ? '+' : ''}{trend.toFixed(1)}% vs previous 7 days
             </div>
           )}
         </div>
@@ -73,7 +73,7 @@ export function BillingClient({ thisMonth, lastMonth }: Props) {
           </p>
           <p className="text-3xl font-bold tracking-[-0.03em] text-[#0A0A0A]">${avgPerCall.toFixed(3)}</p>
           <p className="text-xs mt-2" style={{ color: 'rgba(10,10,10,0.40)' }}>
-            Across {thisMonth.totalCalls} calls
+            Across {current.totalCalls} calls
           </p>
         </div>
 
@@ -82,9 +82,9 @@ export function BillingClient({ thisMonth, lastMonth }: Props) {
           <p className="text-xs font-medium tracking-[0.1em] uppercase mb-3" style={{ color: 'rgba(10,10,10,0.40)' }}>
             Total Minutes Used
           </p>
-          <p className="text-3xl font-bold tracking-[-0.03em] text-[#0A0A0A]">{Math.round(thisMonth.totalMinutes)}</p>
+          <p className="text-3xl font-bold tracking-[-0.03em] text-[#0A0A0A]">{Math.round(current.totalMinutes)}</p>
           <p className="text-xs mt-2" style={{ color: 'rgba(10,10,10,0.40)' }}>
-            ${(cost / (thisMonth.totalMinutes || 1)).toFixed(4)} per minute
+            ${(cost / (current.totalMinutes || 1)).toFixed(4)} per minute
           </p>
         </div>
       </div>
@@ -94,7 +94,7 @@ export function BillingClient({ thisMonth, lastMonth }: Props) {
         {/* Daily cost chart */}
         <div className="lg:col-span-2 bg-white rounded-2xl border border-[rgba(10,10,10,0.07)] p-6 shadow-[0_1px_4px_rgba(10,10,10,0.06)]">
           <p className="text-[15px] font-semibold text-[#0A0A0A] mb-0.5">Daily Spending</p>
-          <p className="text-xs mb-4" style={{ color: 'rgba(10,10,10,0.40)' }}>Cost per day over the last 30 days</p>
+          <p className="text-xs mb-4" style={{ color: 'rgba(10,10,10,0.40)' }}>Cost per day over the last 7 days</p>
           <ResponsiveContainer width="100%" height={220}>
             <LineChart data={dailyCostData} margin={{ top: 4, right: 8, left: -16, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(10,10,10,0.06)" vertical={false} />

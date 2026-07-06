@@ -4,7 +4,7 @@ import { listAssistants } from '@/lib/vapi/client'
 import { createClient } from '@/lib/supabase/server'
 import { MOCK_ASSISTANT_IDS } from '@/lib/mock-data'
 
-type AssignmentRow = { id: string; vapi_assistant_id: string; display_name: string; is_active: boolean; allowed_edit_fields: unknown }
+type AssignmentRow = { id: string; vapi_assistant_id: string; display_name: string; is_active: boolean }
 
 export async function GET(_request: NextRequest) {
   try {
@@ -21,7 +21,6 @@ export async function GET(_request: NextRequest) {
         vapi_assistant_id: id,
         display_name: '',
         is_active: true,
-        allowed_edit_fields: null,
       }))
     } else {
       const supabase = await createClient()

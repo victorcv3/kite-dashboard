@@ -2,7 +2,7 @@
 
 import { useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
-import { Play, Pause, Volume2 } from 'lucide-react'
+import { Play, Pause, Download } from 'lucide-react'
 
 export function AudioPlayer({ url }: { url: string }) {
   const audioRef = useRef<HTMLAudioElement>(null)
@@ -73,7 +73,15 @@ export function AudioPlayer({ url }: { url: string }) {
         </div>
       </div>
 
-      <Volume2 className="w-4 h-4 text-slate-400" />
+      <Button
+        variant="ghost"
+        size="icon"
+        className="w-8 h-8 text-slate-400 hover:text-slate-700"
+        title="Download recording"
+        render={<a href={url} download target="_blank" rel="noopener noreferrer" />}
+      >
+        <Download className="w-4 h-4" />
+      </Button>
     </div>
   )
 }

@@ -4,10 +4,6 @@ export interface Company {
   id: string
   name: string
   slug: string
-  logo_url: string | null
-  brand_color: string
-  support_email: string | null
-  booking_url: string | null
   created_at: string
 }
 
@@ -16,54 +12,13 @@ export interface Profile {
   company_id: string
   role: UserRole
   full_name: string | null
-  avatar_url: string | null
   created_at: string
-}
-
-export interface VapiAssignedAssistant {
-  id: string
-  company_id: string
-  vapi_assistant_id: string
-  display_name: string
-  is_active: boolean
-  allowed_edit_fields: string[]
-  created_at: string
-}
-
-export interface VapiAssignedPhoneNumber {
-  id: string
-  company_id: string
-  vapi_phone_number_id: string
-  display_name: string | null
-  is_active: boolean
-  created_at: string
-}
-
-export interface ClientSettings {
-  company_id: string
-  feature_flags: FeatureFlags
-  usage_limits: UsageLimits
-  advanced_mode: boolean
-}
-
-export interface FeatureFlags {
-  showCost?: boolean
-  showTranscripts?: boolean
-  showAudioPlayer?: boolean
-  showStructuredData?: boolean
-  showAnalytics?: boolean
-}
-
-export interface UsageLimits {
-  maxCallsPerMonth?: number
-  maxMinutesPerMonth?: number
 }
 
 export interface SessionData {
   user: { id: string; email: string }
   profile: Profile
   company: Company
-  settings: ClientSettings | null
 }
 
 // Vapi types
@@ -78,7 +33,7 @@ export interface VapiCall {
   status: 'queued' | 'ringing' | 'in-progress' | 'forwarding' | 'ended'
   endedReason?: string
   cost?: number
-  costBreakdown?: Record<string, number>
+  costBreakdown?: Record<string, number> & { analysisCostBreakdown?: Record<string, number> }
   duration?: number
   assistant?: VapiAssistant
   assistantId?: string
@@ -90,7 +45,6 @@ export interface VapiCall {
     successEvaluation?: string
   }
   artifact?: {
-    transcript?: string
     recordingUrl?: string
     stereoRecordingUrl?: string
     messages?: VapiTranscriptMessage[]
@@ -99,7 +53,8 @@ export interface VapiCall {
 }
 
 export interface VapiTranscriptMessage {
-  role: 'assistant' | 'user' | 'tool' | 'system'
+  // Real values from VAPI's artifact.messages — not 'assistant', it's 'bot'.
+  role: 'system' | 'bot' | 'user' | 'tool_calls' | 'tool_call_result'
   message: string
   time: number
   endTime?: number
@@ -152,14 +107,9 @@ export interface AnalyticsData {
   avgDuration: number
   totalMinutes: number
   estimatedCost: number
+  uniqueCallers: number
   callsByDay: { date: string; count: number; successful: number; failed: number }[]
   outcomeBreakdown: { name: string; value: number; color: string }[]
-  previousPeriod: {
-    totalCalls: number
-    successfulCalls: number
-    avgDuration: number
-    estimatedCost: number
-  }
 }
 
 export interface DateRange {

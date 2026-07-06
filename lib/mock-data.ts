@@ -1,4 +1,4 @@
-import type { VapiCall, VapiAssistant, VapiPhoneNumber, AnalyticsData } from '@/types/app'
+import type { VapiCall, VapiAssistant, VapiPhoneNumber, AnalyticsData, VapiTranscriptMessage } from '@/types/app'
 import { subDays, format, addMinutes } from 'date-fns'
 
 // ─── Assistants ────────────────────────────────────────────────────────────────
@@ -152,7 +152,7 @@ function generateMockCall(index: number, daysAgo: number): VapiCall {
   const summaryIdx = index % SUMMARIES.length
   const structuredDataIdx = index % STRUCTURED_DATA_EXAMPLES.length
 
-  const transcript = isVoicemail ? undefined : generateTranscript(assistant.name, duration)
+  const messages = isVoicemail ? undefined : generateMockMessages(duration)
 
   return {
     id: `call_demo_${String(index).padStart(4, '0')}`,
@@ -188,32 +188,36 @@ function generateMockCall(index: number, daysAgo: number): VapiCall {
       successEvaluation: isSuccessful ? 'true' : 'false',
     },
     artifact: {
-      transcript,
       recordingUrl: isSuccessful ? `https://storage.vapi.ai/recordings/demo_${index}.wav` : undefined,
-      messages: undefined,
+      messages,
     },
   }
 }
 
-function generateTranscript(assistantName: string, duration: number): string {
+// Mirrors VAPI's real artifact.messages shape ('bot'/'user' roles, not 'assistant').
+function generateMockMessages(duration: number): VapiTranscriptMessage[] {
   const exchanges = Math.floor(duration / 30)
-  const lines = [
-    `AI: Hi! Thanks for calling. I'm here to help you today. How can I assist you?`,
-    `User: Hi, yes I was calling to get some information.`,
-    `AI: Of course, I'd be happy to help! What information are you looking for?`,
-    `User: I wanted to know about scheduling an appointment.`,
-    `AI: Absolutely! I can help with that. What day and time works best for you?`,
-    `User: How about next Tuesday around 2 PM?`,
-    `AI: Let me check our availability for Tuesday at 2 PM... Yes, that time is available!`,
-    `User: Perfect, let's go with that.`,
-    `AI: Great! I've got you down for Tuesday at 2 PM. Can I get your name and contact information?`,
-    `User: Sure, it's John Smith and my email is john@example.com.`,
-    `AI: Perfect! You're all set. You'll receive a confirmation email shortly. Is there anything else I can help you with?`,
-    `User: No, that's all. Thank you!`,
-    `AI: You're welcome! Have a wonderful day. Goodbye!`,
+  const lines: { role: 'bot' | 'user'; message: string }[] = [
+    { role: 'bot', message: "Hi! Thanks for calling. I'm here to help you today. How can I assist you?" },
+    { role: 'user', message: 'Hi, yes I was calling to get some information.' },
+    { role: 'bot', message: "Of course, I'd be happy to help! What information are you looking for?" },
+    { role: 'user', message: 'I wanted to know about scheduling an appointment.' },
+    { role: 'bot', message: 'Absolutely! I can help with that. What day and time works best for you?' },
+    { role: 'user', message: 'How about next Tuesday around 2 PM?' },
+    { role: 'bot', message: 'Let me check our availability for Tuesday at 2 PM... Yes, that time is available!' },
+    { role: 'user', message: "Perfect, let's go with that." },
+    { role: 'bot', message: "Great! I've got you down for Tuesday at 2 PM. Can I get your name and contact information?" },
+    { role: 'user', message: "Sure, it's John Smith and my email is john@example.com." },
+    { role: 'bot', message: "Perfect! You're all set. You'll receive a confirmation email shortly. Is there anything else I can help you with?" },
+    { role: 'user', message: "No, that's all. Thank you!" },
+    { role: 'bot', message: 'You\'re welcome! Have a wonderful day. Goodbye!' },
   ]
 
-  return lines.slice(0, Math.min(exchanges * 2 + 1, lines.length)).join('\n')
+  return lines.slice(0, Math.min(exchanges * 2 + 1, lines.length)).map((line, i) => ({
+    role: line.role,
+    message: line.message,
+    time: i * 15000,
+  }))
 }
 
 // Generate calls with a realistic distribution — starts low, builds to a peak, slight drop
@@ -240,6 +244,7 @@ export function computeMockAnalytics(calls: VapiCall[]): AnalyticsData {
   const avgDuration = totalCalls > 0 ? totalDuration / totalCalls : 0
   const totalMinutes = totalDuration / 60
   const estimatedCost = calls.reduce((sum, c) => sum + (c.cost ?? 0), 0)
+  const uniqueCallers = new Set(calls.map(c => c.customer?.number).filter(Boolean)).size
 
   // Group by day
   const byDay: Record<string, { count: number; successful: number; failed: number }> = {}
@@ -255,12 +260,11 @@ export function computeMockAnalytics(calls: VapiCall[]): AnalyticsData {
     .map(([date, data]) => ({ date, ...data }))
     .reverse()
 
-  // Outcome breakdown
+  // Outcome breakdown — binary from the customer's perspective, matching
+  // StatusBadge's Successful/Unsuccessful split (no fabricated sub-buckets).
   const outcomeBreakdown = [
     { name: 'Successful', value: successfulCalls, color: '#10b981' },
-    { name: 'Failed', value: Math.floor(failedCalls * 0.5), color: '#8b5cf6' },
-    { name: 'Voicemail', value: Math.floor(failedCalls * 0.3), color: '#f59e0b' },
-    { name: 'No Answer', value: Math.ceil(failedCalls * 0.2), color: '#94a3b8' },
+    { name: 'Unsuccessful', value: failedCalls, color: '#ef4444' },
   ].filter(o => o.value > 0)
 
   return {
@@ -270,14 +274,9 @@ export function computeMockAnalytics(calls: VapiCall[]): AnalyticsData {
     avgDuration,
     totalMinutes,
     estimatedCost,
+    uniqueCallers,
     callsByDay,
     outcomeBreakdown,
-    previousPeriod: {
-      totalCalls: Math.floor(totalCalls * 0.85),
-      successfulCalls: Math.floor(successfulCalls * 0.8),
-      avgDuration: avgDuration * 0.9,
-      estimatedCost: estimatedCost * 0.88,
-    },
   }
 }
 
@@ -308,8 +307,10 @@ export function getMockCalls(params: {
   if (params.status) {
     calls = calls.filter(c => c.status === params.status)
   }
-  if (params.successEvaluation) {
-    calls = calls.filter(c => c.analysis?.successEvaluation === params.successEvaluation)
+  if (params.successEvaluation === 'true') {
+    calls = calls.filter(c => c.analysis?.successEvaluation === 'true')
+  } else if (params.successEvaluation === 'false') {
+    calls = calls.filter(c => c.analysis?.successEvaluation !== 'true')
   }
   if (params.search) {
     const s = params.search.toLowerCase()
@@ -335,5 +336,4 @@ export function getMockAssistant(id: string): VapiAssistant | null {
   return MOCK_ASSISTANTS.find(a => a.id === id) ?? null
 }
 
-export const MOCK_ASSISTANT_IDS = MOCK_ASSISTANTS.map(a => a.id)
-export const MOCK_PHONE_IDS = MOCK_PHONE_NUMBERS.map(p => p.id)
+export const MOCK_ASSISTANT_IDS = ['6f891a52-5606-40a7-980d-4e3dc35bfb72']

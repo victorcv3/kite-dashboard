@@ -56,6 +56,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: createError.message }, { status: 422 })
     }
 
+    // Don't rely solely on the on_auth_user_created trigger — it reads
+    // app_metadata.company_id off the auth.users row at INSERT time, but
+    // Supabase's admin.createUser() appears to set that metadata in a
+    // follow-up update, so the trigger sees it as null and silently skips
+    // creating the profile. Upsert it explicitly here as the source of truth.
+    const { error: profileError } = await admin
+      .from('profiles')
+      .upsert({
+        id: newUser.user.id,
+        company_id: invite.company_id,
+        role: invite.role,
+        full_name: fullName,
+      } as never)
+
+    if (profileError) {
+      return NextResponse.json({ error: profileError.message }, { status: 500 })
+    }
+
     await admin
       .from('invites')
       .update({ accepted_at: new Date().toISOString() } as never)

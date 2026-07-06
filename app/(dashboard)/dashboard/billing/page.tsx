@@ -1,5 +1,5 @@
 import { getSession } from '@/lib/supabase/get-session'
-import { getAnalytics } from '@/lib/vapi/client'
+import { getAnalytics, VAPI_RETENTION_DAYS } from '@/lib/vapi/client'
 import { createClient } from '@/lib/supabase/server'
 import { MOCK_ASSISTANT_IDS } from '@/lib/mock-data'
 import { subDays } from 'date-fns'
@@ -24,11 +24,15 @@ export default async function BillingPage() {
       ?.map(r => r.vapi_assistant_id) ?? []
   }
 
+  // VAPI's plan retention only covers the last 14 days — split that window in
+  // half instead of a real month-over-month compare (a true "last month" range
+  // falls entirely outside retention and would always read as zero).
   const now = new Date()
-  const [thisMonth, lastMonth] = await Promise.all([
-    getAnalytics(assistantIds, subDays(now, 30), now) as Promise<AnalyticsData>,
-    getAnalytics(assistantIds, subDays(now, 60), subDays(now, 30)) as Promise<AnalyticsData>,
+  const halfWindow = VAPI_RETENTION_DAYS / 2
+  const [current, previous] = await Promise.all([
+    getAnalytics(assistantIds, subDays(now, halfWindow), now) as Promise<AnalyticsData>,
+    getAnalytics(assistantIds, subDays(now, VAPI_RETENTION_DAYS), subDays(now, halfWindow)) as Promise<AnalyticsData>,
   ])
 
-  return <BillingClient thisMonth={thisMonth} lastMonth={lastMonth} />
+  return <BillingClient current={current} previous={previous} />
 }

@@ -5,28 +5,14 @@ import { OutcomeChart } from '@/components/dashboard/OutcomeChart'
 import { PeriodFilter } from '@/components/dashboard/PeriodFilter'
 import { StatusBadge } from '@/components/shared/StatusBadge'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Timer, PhoneCall, DollarSign, TrendingUp } from 'lucide-react'
-import { formatDuration, formatCostDisplay, formatDateTime, formatPhoneNumber } from '@/lib/utils'
+import { Timer, PhoneCall, CheckCircle2, Users } from 'lucide-react'
+import { formatDuration, formatDateTime, formatPhoneNumber } from '@/lib/utils'
 import type { AnalyticsData, VapiCall } from '@/types/app'
 import Link from 'next/link'
 import { getSession } from '@/lib/supabase/get-session'
-import { getAnalytics, listCalls } from '@/lib/vapi/client'
+import { getAnalytics, listCalls, getPeriodRange, type Period } from '@/lib/vapi/client'
 import { createClient } from '@/lib/supabase/server'
-import { subDays } from 'date-fns'
 import { MOCK_ASSISTANT_IDS } from '@/lib/mock-data'
-
-type Period = 'today' | 'week' | 'month' | 'all'
-
-function getDateRange(period: Period): { start: Date; end: Date } {
-  const now = new Date()
-  const rangeMap: Record<Period, Date> = {
-    today: subDays(now, 1),
-    week: subDays(now, 7),
-    month: subDays(now, 30),
-    all: subDays(now, 365),
-  }
-  return { start: rangeMap[period], end: now }
-}
 
 async function DashboardContent({ period }: { period: Period }) {
   const session = await getSession()
@@ -49,7 +35,7 @@ async function DashboardContent({ period }: { period: Period }) {
   let analytics: AnalyticsData | null = null
   let recentCalls: VapiCall[] = []
 
-  const { start, end } = getDateRange(period)
+  const { start, end } = getPeriodRange(period)
 
   try {
     ;[analytics, recentCalls] = await Promise.all([
@@ -60,9 +46,9 @@ async function DashboardContent({ period }: { period: Period }) {
     console.error('[dashboard] error:', err)
   }
 
-  const p = analytics?.previousPeriod
-  const totalMinutes = analytics ? Math.round(analytics.totalMinutes) : 0
-  const prevMinutes = p ? Math.round((p.totalCalls / (analytics?.totalCalls || 1)) * (analytics?.totalMinutes || 0) * 0.85) : 0
+  const successRate = analytics && analytics.totalCalls > 0
+    ? Math.round((analytics.successfulCalls / analytics.totalCalls) * 100)
+    : 0
 
   return (
     <div className="space-y-5">
@@ -83,44 +69,32 @@ async function DashboardContent({ period }: { period: Period }) {
       {/* Stat cards — 4 cols, Vapify style with colored icons */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          label="Total Call Minutes"
-          value={totalMinutes}
-          icon={Timer}
-          iconBg="#eff6ff"
-          iconColor="#3b82f6"
-          current={totalMinutes}
-          previous={prevMinutes}
-        />
-        <StatCard
           label="Number of Calls"
           value={analytics?.totalCalls ?? 0}
           icon={PhoneCall}
           iconBg="#f5f3ff"
           iconColor="#8b5cf6"
-          current={analytics?.totalCalls}
-          previous={p?.totalCalls}
         />
         <StatCard
-          label="Total Spent"
-          value={formatCostDisplay(analytics?.estimatedCost)}
-          icon={DollarSign}
+          label="Avg Duration per Call"
+          value={formatDuration(analytics?.avgDuration)}
+          icon={Timer}
+          iconBg="#eff6ff"
+          iconColor="#3b82f6"
+        />
+        <StatCard
+          label="Success Rate"
+          value={`${successRate}%`}
+          icon={CheckCircle2}
           iconBg="#ecfdf5"
           iconColor="#10b981"
-          current={analytics?.estimatedCost}
-          previous={p?.estimatedCost}
-          positiveIsGood={false}
         />
         <StatCard
-          label="Avg Cost per Call"
-          value={analytics && analytics.totalCalls > 0
-            ? `$${(analytics.estimatedCost / analytics.totalCalls).toFixed(2)}`
-            : '$0.00'}
-          icon={TrendingUp}
+          label="Unique Callers"
+          value={analytics?.uniqueCallers ?? 0}
+          icon={Users}
           iconBg="#fff7ed"
           iconColor="#f97316"
-          current={analytics && analytics.totalCalls > 0 ? analytics.estimatedCost / analytics.totalCalls : undefined}
-          previous={p && p.totalCalls > 0 ? (p as unknown as { estimatedCost: number }).estimatedCost / p.totalCalls : undefined}
-          positiveIsGood={false}
         />
       </div>
 
@@ -187,11 +161,7 @@ async function DashboardContent({ period }: { period: Period }) {
                   <span className="text-xs" style={{ color: 'rgba(10,10,10,0.40)' }}>
                     {formatDuration(call.duration)}
                   </span>
-                  <StatusBadge
-                    status={call.status}
-                    endedReason={call.endedReason}
-                    successEvaluation={call.analysis?.successEvaluation}
-                  />
+                  <StatusBadge successEvaluation={call.analysis?.successEvaluation} />
                 </div>
               </Link>
             ))}
@@ -229,8 +199,8 @@ export default async function DashboardPage({
   searchParams: Promise<{ period?: string }>
 }) {
   const params = await searchParams
-  const valid = ['today', 'week', 'month', 'all'] as const
-  const period = (valid.includes(params.period as Period) ? params.period : 'month') as Period
+  const valid = ['today', 'week', 'max'] as const
+  const period = (valid.includes(params.period as Period) ? params.period : 'max') as Period
 
   return (
     <Suspense fallback={<DashboardSkeleton />}>

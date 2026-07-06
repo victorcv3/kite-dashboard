@@ -76,11 +76,6 @@ export function endedReasonLabel(reason: string | undefined): string {
   return map[reason] ?? reason.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase())
 }
 
-export function percentChange(current: number, previous: number): number | null {
-  if (!previous) return null
-  return ((current - previous) / previous) * 100
-}
-
 export function isAdmin(role: string): boolean {
   return role === 'admin'
 }

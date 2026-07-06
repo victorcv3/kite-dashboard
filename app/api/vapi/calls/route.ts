@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession, AuthError } from '@/lib/supabase/get-session'
-import { listCalls } from '@/lib/vapi/client'
+import { listCalls, getPeriodRange, type Period } from '@/lib/vapi/client'
 import { createClient } from '@/lib/supabase/server'
 import { MOCK_ASSISTANT_IDS } from '@/lib/mock-data'
 
@@ -26,6 +26,11 @@ export async function GET(request: NextRequest) {
     if (!assistantIds.length) return NextResponse.json([])
 
     const { searchParams } = request.nextUrl
+    const validPeriods = ['today', 'week', 'max'] as const
+    const periodParam = searchParams.get('period')
+    const period = (validPeriods.includes(periodParam as Period) ? periodParam : 'max') as Period
+    const { start, end } = getPeriodRange(period)
+
     const calls = await listCalls({
       assistantIds,
       limit: Number(searchParams.get('limit') ?? 20),
@@ -33,6 +38,8 @@ export async function GET(request: NextRequest) {
       status: searchParams.get('status') ?? undefined,
       successEvaluation: searchParams.get('successEvaluation') ?? undefined,
       search: searchParams.get('search') ?? undefined,
+      startDate: start,
+      endDate: end,
     })
 
     return NextResponse.json(calls)
