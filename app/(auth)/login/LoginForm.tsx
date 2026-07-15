@@ -51,7 +51,7 @@ export default function LoginForm() {
   async function handleReset(data: ResetForm) {
     setError(null)
     const { error } = await supabase.auth.resetPasswordForEmail(data.email, {
-      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin}/auth/callback`,
+      redirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? window.location.origin}/auth/callback?next=/reset-password`,
     })
     if (error) {
       setError(error.message)
